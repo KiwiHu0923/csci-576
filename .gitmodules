@@ -1,3 +1,0 @@
-[submodule "HW1/dependency/wxWidgets"]
-	path = HW1/dependency/wxWidgets
-	url = https://github.com/wxWidgets/wxWidgets.git
