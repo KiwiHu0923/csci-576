@@ -1,6 +1,3 @@
-This is a cross-platform C++ imageDisplay starter project using wxWidgets. You can use command line tools
-and any editor to work on this project, but the setup instructions that we provided specifically cater
-to Visual Studio Code (VS Code) - https://code.visualstudio.com/ which is a cross platform code editor.
 
 It contains three folders:
 	1. src: source code, this is where you should put your code
@@ -18,44 +15,21 @@ read it and it should be easy to understand how to modify it for your own purpos
 
 IMPORTANT
 
-To build and run the project, open the ImageDisplay_C++_cross_platform folder as the root folder
-in VS Code. You should not open the parent folder (CSCI-576-starter-code) in VS code if you are
-trying to build this C++ project.
+The original starter code is from ImageDisplay_C++_cross_platform at: https://github.com/Junyingw/CSCI-576-starter-code#
+
+Clone
+	After clonning this repository, `git submodule update --init --recursive` is needed.
 
 
 Build and Run
 
-
-1. Install GCC Complier
-	
-	Windows: You can install mingw-w64 from https://sourceforge.net/projects/mingw-w64/
-	Mac: You can install using Homebrew. You may already have clang installed (which is invoked
-		when gcc command is run). This should be fine. You can verify this using `gcc --version`.
-	Linux: You can install gcc using apt-get (or apt)
-
-	Verify GCC installation by running `gcc --version`. GCC version 12.2 or higher is recommended.
-	On Mac, clang version 15.0.0 or higher is recommended
-	You may need to add gcc to the PATH environment variable.
-
-2. Install CMake
-
-	Windows: You can install cmake from https://cmake.org/download/
-	Mac: You can install using Homebrew
-	Linux: You can install using apt-get (or apt)
-
-	Verify CMake installation by running `cmake --version`. CMake version 3.28.1 or higher is recommended.
-	You may need to add cmake to the PATH environment variable.
-
-3. Open the project folder in vscode.
-
-4. Install and activate the following vscode extensions from the extensions marketplace.
-	https://marketplace.visualstudio.com/
-
-	a. C / C++ for VS Code - https://marketplace.visualstudio.com/items?itemName=ms-vscode.cpptools
-	b. CMake for VS Code - https://marketplace.visualstudio.com/items?itemName=twxs.cmake
-	c. CMake Tools - https://marketplace.visualstudio.com/items?itemName=ms-vscode.cmake-tools
-
-	Ensure that all these extensions are active. Reload or restart vscode if needed.
+Configuration:
+	Machine: Apple Silicon Mac
+	Chip: Apple M3 Max
+	OS: Sequoia 15.7.3
+	Architecture: arm64
+	Compiler: gcc (Apple clang version 17.0.0)
+	CMake: 4.2.3
 
 5. Configure CMake
 
