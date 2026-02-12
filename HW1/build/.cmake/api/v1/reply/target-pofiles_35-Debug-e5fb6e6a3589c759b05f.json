@@ -1,0 +1,90 @@
+{
+	"backtrace" : 2,
+	"backtraceGraph" : 
+	{
+		"commands" : 
+		[
+			"add_custom_target",
+			"gettext_process_po_files"
+		],
+		"files" : 
+		[
+			"/opt/homebrew/share/cmake/Modules/FindGettext.cmake",
+			"dependency/wxWidgets/build/cmake/locale/CMakeLists.txt"
+		],
+		"nodes" : 
+		[
+			{
+				"file" : 1
+			},
+			{
+				"command" : 1,
+				"file" : 1,
+				"line" : 27,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 573,
+				"parent" : 1
+			}
+		]
+	},
+	"codemodelVersion" : 
+	{
+		"major" : 2,
+		"minor" : 9
+	},
+	"folder" : 
+	{
+		"name" : "Locales"
+	},
+	"id" : "pofiles_35::@0ffbf10e2256fd0a4baa",
+	"name" : "pofiles_35",
+	"paths" : 
+	{
+		"build" : "dependency/wxWidgets/locale",
+		"source" : "dependency/wxWidgets/build/cmake/locale"
+	},
+	"sourceGroups" : 
+	[
+		{
+			"name" : "",
+			"sourceIndexes" : 
+			[
+				0
+			]
+		},
+		{
+			"name" : "CMake Rules",
+			"sourceIndexes" : 
+			[
+				1,
+				2
+			]
+		}
+	],
+	"sources" : 
+	[
+		{
+			"backtrace" : 2,
+			"isGenerated" : true,
+			"path" : "build/dependency/wxWidgets/locale/CMakeFiles/pofiles_35",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 0,
+			"isGenerated" : true,
+			"path" : "build/dependency/wxWidgets/locale/CMakeFiles/pofiles_35.rule",
+			"sourceGroupIndex" : 1
+		},
+		{
+			"backtrace" : 0,
+			"isGenerated" : true,
+			"path" : "build/dependency/wxWidgets/locale/ru.gmo.rule",
+			"sourceGroupIndex" : 1
+		}
+	],
+	"type" : "UTILITY"
+}
