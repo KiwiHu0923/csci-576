@@ -1,2 +1,0 @@
-/usr/bin/ar qc libwxwebpdemux-3.3.a CMakeFiles/webpdemux.dir/src/demux/anim_decode.c.o CMakeFiles/webpdemux.dir/src/demux/demux.c.o
-/usr/bin/ranlib libwxwebpdemux-3.3.a

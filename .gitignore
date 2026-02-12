@@ -1,5 +1,8 @@
 # Temporary files on Mac
 .DS_Store
+build/
+*/build/
+
 
 # VS Code temporary files
 .vscode
