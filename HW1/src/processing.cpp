@@ -5,6 +5,10 @@
 
 extern unsigned char* readImageData(std::string imagePath, int width, int height);
 
+void build_uniform_map(std::array<std::array<unsigned char, 256>, 3>& map, int levels);
+void build_pivot_map(std::array<std::array<unsigned char, 256>, 3>& map, int levels, int M);
+void build_optimal_equal_map(std::array<std::array<unsigned char, 256>, 3>& map, const Image& img, int levels);
+
 Image applyFilter(const Image& img) {
     Image out(img.width, img.height);
 
@@ -51,6 +55,38 @@ Image resample(const Image &img, float scale) {
     return out;
 }
 
+void quantize(Image &img, int Q, int M) {
+    if (Q < 3 || Q > 24 || (Q % 3 != 0)) {
+        // invalid Q
+        return;
+    }
+
+    int bitsPerChannel = Q / 3;
+    int levels = 1 << bitsPerChannel; // 2^(bitsPerChannel)
+
+    std::array<std::array<unsigned char, 256>, 3> map;
+
+    if (M == -1) {
+        build_uniform_map(map, levels);
+    } else if (M >= 0 && M <= 255) {
+        build_pivot_map(map, levels, M);
+    } else if (M == 256) {
+        build_optimal_equal_map(map, img, levels);
+    }
+    else {
+        return;
+    }
+
+    for (int y = 0; y < img.height; y++) {
+        for (int x = 0; x < img.width; x++) {
+            int base = (y * img.width + x) * 3;
+            for (int c = 0; c < 3; c++) {
+                unsigned char v = img.data[base + c];
+                img.data[base + c] = map[c][v];
+            }
+        }
+    }
+}
 unsigned char* runImagePipeline(
     const std::string& imagePath,
     int& width,
