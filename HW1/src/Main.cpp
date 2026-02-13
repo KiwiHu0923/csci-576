@@ -6,6 +6,9 @@
 #include <string>
 #include <vector>
 
+#include "processing.h"
+#include "image.h"
+
 using namespace std;
 namespace fs = std::filesystem;
 
@@ -30,7 +33,7 @@ class MyApp : public wxApp {
  */
 class MyFrame : public wxFrame {
  public:
-  MyFrame(const wxString &title, string imagePath);
+  MyFrame(const wxString &title, string imagePath, float S, int Q, int M);
 
  private:
   void OnPaint(wxPaintEvent &event);
@@ -55,17 +58,22 @@ bool MyApp::OnInit() {
 
   // deal with command line arguments here
   cout << "Number of command line arguments: " << wxApp::argc << endl;
-  if (wxApp::argc != 2) {
-    cerr << "The executable should be invoked with exactly one filepath "
-            "argument. Example ./MyImageApplication '../../Lena_512_512.rgb'"
+  if (wxApp::argc != 5) {
+    cerr << "The executable should be invoked with exactly 5 arguments, "
+            "Example ./MyImageApplication '../../Lena_512_512.rgb 1.0 24 -1'"
          << endl;
     exit(1);
   }
   cout << "First argument: " << wxApp::argv[0] << endl;
   cout << "Second argument: " << wxApp::argv[1] << endl;
-  string imagePath = wxApp::argv[1].ToStdString();
 
-  MyFrame *frame = new MyFrame("Image Display", imagePath);
+
+  string imagePath = wxApp::argv[1].ToStdString();
+  float S = stof(wxApp::argv[2].ToStdString());
+  int Q = stoi(wxApp::argv[3].ToStdString());
+  int M = stoi(wxApp::argv[4].ToStdString());
+
+  MyFrame *frame = new MyFrame("Image Display", imagePath, S, Q, M);
   frame->Show(true);
 
   // return true to continue, false to exit the application
@@ -76,7 +84,7 @@ bool MyApp::OnInit() {
  * Constructor for the MyFrame class.
  * Here we read the pixel data from the file and set up the scrollable window.
  */
-MyFrame::MyFrame(const wxString &title, string imagePath)
+MyFrame::MyFrame(const wxString &title, string imagePath, float S, int Q, int M)
     : wxFrame(NULL, wxID_ANY, title) {
 
   // Modify the height and width values here to read and display an image with
@@ -84,13 +92,9 @@ MyFrame::MyFrame(const wxString &title, string imagePath)
   width = 512;
   height = 512;
 
-  unsigned char *inData = readImageData(imagePath, width, height);
+  unsigned char *outData = runImagePipeline(imagePath, width, height, S, Q, M);
 
-  // the last argument is static_data, if it is false, after this call the
-  // pointer to the data is owned by the wxImage object, which will be
-  // responsible for deleting it. So this means that you should not delete the
-  // data yourself.
-  inImage.SetData(inData, width, height, false);
+  inImage.SetData(outData, width, height, false);
 
   // Set up the scrolled window as a child of this frame
   scrolledWindow = new wxScrolledWindow(this, wxID_ANY);

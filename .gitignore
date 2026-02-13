@@ -7,8 +7,3 @@ build/
 # VS Code temporary files
 .vscode
 */.vscode
-
-# Ignoring the build outputs for the cross-platform C++ project
-ImageDisplay_C++_cross_platform/build
-
-
