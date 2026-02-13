@@ -10,6 +10,6 @@ public:
 
     Image(int w, int h);
 
-    unsigned char* get(int x, int y, int c) const;
+    unsigned char get(int x, int y, int c) const;
     void set(int x, int y, int c, unsigned char val);
 };
