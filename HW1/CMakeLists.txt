@@ -7,6 +7,8 @@ set(CMAKE_CXX_STANDARD 17)
 # Add source files
 set(SOURCES
     src/Main.cpp
+    src/processing.cpp
+    src/image.cpp
     manifest/MyImageApplication.rc
 )
 
