@@ -1,107 +1,201 @@
+================================================================================
+CSCI 576 - Assignment 1
+Image Processing: Resampling and Quantization
+================================================================================
 
-It contains three folders:
-	1. src: source code, this is where you should put your code
-	2. dependency: this is where the project dependencies reside
-	3. manifest: this is where the manifest file resides, it is specifically used for windows
+PROJECT OVERVIEW
+----------------
+This project implements an image processing pipeline with the following stages:
+  1. Filtering     - 3x3 averaging filter applied before downscaling
+  2. Resampling    - Nearest-neighbor scaling by factor S
+  3. Quantization  - Three modes:
+       M = -1   : Uniform (equal-interval) quantization
+       M = 0-255: Pivot quantization (split range at value M)
+       M = 256  : Optimal equal-frequency histogram quantization
 
-Normally, you wouldn't need to touch the manifest and dependency folders unless you really know what you are doing!
+A separate analysis tool (analyze) computes MSE and MAE error metrics for the
+quantization analysis section of the assignment.
 
-To avoid possible OS compatibility issues, we don't provide pre-compiled binaries for dependencies,
-but the build script (CMakeLists.txt) has been provided. 
+Directory structure:
+  src/                  C++ source files
+    Main.cpp            GUI entry point (wxWidgets)
+    processing.cpp/.h   Filter, resample, quantize, pipeline
+    image.cpp/.h        Image class
+    analyze_main.cpp    Standalone CLI for error analysis (no wxWidgets)
+    analysis.cpp/.h     MSE and MAE computation
+  scripts/
+    run_experiment.sh   Runs the full Q/M sweep for one image, outputs CSV
+    plot_results.py     Plots MSE and MAE curves from CSV files
+  sample_images/        512x512 .rgb test images
+  results/              Output CSVs and plots (created at runtime)
+  build/                CMake build output
 
-Currently there is only one Main.cpp file in the src folder, you can add more files if you want,
-but you need to modify the CMakeLists.txt file accordingly. The main file is well commented,
-read it and it should be easy to understand how to modify it for your own purposes.
+================================================================================
+1. COMPILATION INSTRUCTIONS
+================================================================================
 
-IMPORTANT
+Prerequisites:
+  - CMake >= 3.5
+  - C++17-compatible compiler (clang or gcc)
+  - Python 3 with matplotlib (for plotting only)
 
-The original starter code is from ImageDisplay_C++_cross_platform at: https://github.com/Junyingw/CSCI-576-starter-code#
+Step 1 - First-time setup (fetch submodules for wxWidgets):
 
-Clone
-	After clonning this repository, `git submodule update --init --recursive` is needed.
+    git submodule update --init --recursive
 
+Step 2 - Configure CMake:
 
-Build and Run
+    cmake -S . -B build
 
-Configuration:
-	Machine: Apple Silicon Mac
-	Chip: Apple M3 Max
-	OS: Sequoia 15.7.3
-	Architecture: arm64
-	Compiler: gcc (Apple clang version 17.0.0)
-	CMake: 4.2.3
+    In VSCode: Command Palette > "CMake: Configure"
+    Select your compiler when prompted (clang recommended on macOS).
 
-5. Configure CMake
+Step 3 - Build all targets:
 
-	Note: All vscode commands are run from the vscode command palette. To activate the Command Palette,
-	Windows / Linux: Ctrl+Shift+P,
- 	Mac:  Cmd+Shift+P
+    cmake --build build
 
-	Command Palette > Type in "CMake: Configure" and execute it.
-	
-	1. Find your compiler installation (gcc or clang) in the options that appear.
-	   You may use the [scan for kits] option to scan the device for compiler installations.
+    In VSCode: Command Palette > "CMake: Build"
 
-	2. If prompted, Choose the correct location for CMakeLists
-	   file - ${workspaceFolder}/ImageDisplay_C++_cross_platform/CMakeLists.txt
+    This produces two executables inside the build/ folder:
+      build/MyImageApplication   (GUI viewer)
+      build/analyze              (CLI error analysis tool)
 
-	At this point, the Configure command should execute and you may see some output in vscode output window.
+    Note: The first build may take several minutes because wxWidgets is compiled
+    from source. Subsequent builds are incremental and much faster.
 
-6. Set up Configuration Provider
+Step 4 - Rebuild after source changes:
 
-	Command Palette > Type in "C/C++: Change Configuration Provider" and run it.
-	'CMake Tools' should be an option listed if the previous configure step was successful. Choose that.
+    cmake --build build
 
-	Command Palette > Type in "C/C++: Edit Configurations (UI)" and run it.
-	This opens up a UI where you can edit the configurations. 
-	
-	1. Change compiler path and intellisense mode accordingly.
-	2. Change C standard and C++ standard to c17 and c++17 respectively.
+    In VSCode: Command Palette > "CMake: Build"
 
-7. Build
+    For a full clean rebuild (e.g. after changing CMakeLists.txt):
+    Command Palette > "CMake: Clean Rebuild"
 
-	Command Palette > Type in "CMake: Set build target" and run it.
-	Choose the target you want to build. You may choose MyImageApplication to create an executable
-	with that name.
+Install matplotlib (required for plotting):
 
-	Command Palette > Type in "CMake: Delete cache and reconfigure" and run it.
-	This just cleans up the repository to prepare for a clean rebuild.
+    pip3 install matplotlib
 
-	Command Palette > Type in "CMake: Build" and run it.
-	
-	- Initial build might take some time, because the dependencies need to be built first,
-	but later builds should be faster.
-	- Rarely, you may want to run "CMake: Clean rebuild", but this would
-	rebuild the whole project, including the dependencies, which may take a long time.
+================================================================================
+2. RUN INSTRUCTIONS
+================================================================================
 
+--- GUI Viewer (MyImageApplication) ---
 
-8. Run
+Usage:
+    ./build/MyImageApplication <imagePath> <S> <Q> <M>
 
-	- In the /build folder, you will find the executable (MyImageApplication).
-	- To run this, navigate to the build folder in a terminal and run the executable file.
-	- The given starter code takes exactly one argument - a file path to a 512x512 rgb image file
-	- This should be invoked as ./MyImageApplication '<path to rgb file>'
-	- Example - ./MyImageApplication '../../Lena_512_512.rgb'
+Arguments:
+    imagePath   Path to a 512x512 .rgb image file (planar RGB format)
+    S           Scale factor (float). Use 1.0 for no scaling.
+    Q           Total bits per pixel (integer, must be 3-24 and divisible by 3)
+                Examples: 3, 6, 9, 12, 15, 18, 21, 24
+    M           Quantization mode:
+                  -1       Uniform quantization
+                  0-255    Pivot quantization (split at value M)
+                  256      Optimal equal-frequency quantization
 
-9. Rebuilds
+Examples:
+    # No scaling, 24-bit (lossless), uniform quantization
+    ./build/MyImageApplication sample_images/Lena_512_512.rgb 1.0 24 -1
 
-	After making changes to the source code, you need to build the executable again.
-	Command Palette > Type in "CMake: Build" and run it.
+    # Scale to 50%, 12-bit, pivot at 128
+    ./build/MyImageApplication sample_images/Lena_512_512.rgb 0.5 12 128
 
-	On restarting vscode, you may need to configure CMake by running "CMake: Configure"
-	After that, continue building using "CMake: Build".
+    # No scaling, 6-bit, optimal quantization
+    ./build/MyImageApplication sample_images/test1_512x512.rgb 1.0 6 256
 
+--- Analysis CLI (analyze) ---
 
+Usage:
+    ./build/analyze <imagePath> <Q> <M>
 
-For Linux users, this starter code is only tested on Ubuntu 22.04 with default gcc compiler.
-For windows users, this starter code is only tested on Windows 10 with mingw-w64 gcc 12.2.0 compiler.
-For mac users, this starter code is tested on an Apple Silicon mac, using Mac OS 13.4.1 with clang version 14.0.3 (clang-1403.0.22.14.1) compiler.
+Output: one CSV row printed to stdout:
+    <imageName>,<Q>,<M>,<MSE>,<MAE>
 
-If you run into intellisense issues, we recommend the following steps.
-	1. Command Palette > Type in "C/C++: Restart IntelliSense for Active File" and run it
-	2. If it still doesn't work, you can try to reset the intellisense database.
-	3. If still doesn't work, you can try to restart vscode.
-	4. If still does not work, then you may have some problems in intellisense configuration.
+Example:
+    ./build/analyze sample_images/Lena_512_512.rgb 6 -1
+    # Output: Lena_512_512.rgb,6,-1,259893000,12230600
 
-From my perspective, choosing cmake as the intellisense configuration provider is the best choice
-to setup intellisense to index dependency headers.
+Note: S is fixed at 1.0 (no scaling) as required by the analysis question.
+
+================================================================================
+3. SCRIPT INSTRUCTIONS
+================================================================================
+
+--- run_experiment.sh ---
+
+Runs the full experiment sweep for a single image:
+  - Q values: 3, 6, 9, 12, 15, 18, 21, 24
+  - M values: -1 (Uniform), 128 (Pivot), 256 (Optimal)
+Produces a CSV file with all 24 combinations.
+
+Usage:
+    ./scripts/run_experiment.sh <imagePath> [outputCSV]
+
+Arguments:
+    imagePath   Path to the .rgb image file
+    outputCSV   (Optional) Output CSV path.
+                Default: results/<imageName>.csv
+
+Examples:
+    # Results saved to results/Lena_512_512.csv
+    ./scripts/run_experiment.sh sample_images/Lena_512_512.rgb
+
+    # Results saved to a custom path
+    ./scripts/run_experiment.sh sample_images/test1_512x512.rgb results/test1.csv
+
+CSV format:
+    image,Q,M,MSE,MAE
+    Lena_512_512.rgb,3,-1,958316000,23495800
+    Lena_512_512.rgb,3,128,946061000,23282000
+    ...
+
+--- plot_results.py ---
+
+Reads one or more CSV files and produces MSE and MAE plots for each image.
+Each image gets its own pair of output PNG files.
+
+Usage:
+    python3 scripts/plot_results.py <csv1> [<csv2> ...]
+
+Arguments:
+    csv1, csv2, ...   Absolute or relative paths to result CSV files.
+                      Use absolute paths to avoid ambiguity.
+
+Output files (saved in the same directory as each CSV):
+    <imageName>_MSE.png   MSE vs Q plot (3 curves, one per M mode)
+    <imageName>_MAE.png   MAE vs Q plot (3 curves, one per M mode)
+
+Plot layout:
+    X axis: Q values (3, 6, 9, ..., 24)
+    Y axis: Error value (MSE or MAE)
+    Colors: Blue = M=-1 (Uniform), Orange = M=128 (Pivot), Green = M=256 (Optimal)
+    Markers: Different shape per image when multiple images are plotted together
+
+Examples:
+    # Single image
+    python3 scripts/plot_results.py "$(pwd)/results/Lena_512_512.csv"
+
+    # Multiple images (each gets its own output files)
+    python3 scripts/plot_results.py \
+        "$(pwd)/results/Lena_512_512.csv" \
+        "$(pwd)/results/test1_512x512.csv" \
+        "$(pwd)/results/test2_512x512.csv"
+
+--- Full experiment workflow for one image ---
+
+    # Step 1: Build (if not already built)
+    cmake -S . -B build && cmake --build build
+
+    # Step 2: Run experiment and save CSV
+    ./scripts/run_experiment.sh sample_images/Lena_512_512.rgb
+
+    # Step 3: Plot
+    python3 scripts/plot_results.py "$(pwd)/results/Lena_512_512.csv"
+
+    # Step 4: View results
+    open results/Lena_512_512_MSE.png
+    open results/Lena_512_512_MAE.png
+
+================================================================================
