@@ -1,18 +1,3 @@
-
-It contains three folders:
-	1. src: source code, this is where you should put your code
-	2. dependency: this is where the project dependencies reside
-	3. manifest: this is where the manifest file resides, it is specifically used for windows
-
-Normally, you wouldn't need to touch the manifest and dependency folders unless you really know what you are doing!
-
-To avoid possible OS compatibility issues, we don't provide pre-compiled binaries for dependencies,
-but the build script (CMakeLists.txt) has been provided. 
-
-Currently there is only one Main.cpp file in the src folder, you can add more files if you want,
-but you need to modify the CMakeLists.txt file accordingly. The main file is well commented,
-read it and it should be easy to understand how to modify it for your own purposes.
-
 IMPORTANT
 
 The original starter code is from ImageDisplay_C++_cross_platform at: https://github.com/Junyingw/CSCI-576-starter-code#
@@ -25,7 +10,7 @@ Build and Run
 
 Configuration:
 	Machine: Apple Silicon Mac
-	Chip: Apple M3 Max
+	Chip: Apple M3 Maxs
 	OS: Sequoia 15.7.3
 	Architecture: arm64
 	Compiler: gcc (Apple clang version 17.0.0)
