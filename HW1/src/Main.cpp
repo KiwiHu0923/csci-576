@@ -159,7 +159,7 @@ unsigned char *readImageData(string imagePath, int width, int height) {
    */
   unsigned char *inData =
       (unsigned char *)malloc(width * height * 3 * sizeof(unsigned char));
-      
+
   for (int i = 0; i < height * width; i++) {
     // We populate RGB values of each pixel in that order
     // RGB.RGB.RGB and so on for all pixels

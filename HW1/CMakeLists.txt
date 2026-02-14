@@ -12,6 +12,14 @@ set(SOURCES
     manifest/MyImageApplication.rc
 )
 
+# Sources for the analyze tool (no wxWidgets)
+set(ANALYZE_SOURCES
+    src/analyze_main.cpp
+    src/processing.cpp
+    src/image.cpp
+    src/analysis.cpp
+)
+
 if(WIN32)
     set(wxBUILD_SHARED OFF)
     # or you can set it to ON, but you may face some problems about can't find dlls, in this case, you can copy dlls to your exe directory
@@ -21,8 +29,9 @@ endif()
 
 add_subdirectory(dependency/wxWidgets)
 
-# Create executable
+# Create executables
 add_executable(MyImageApplication ${SOURCES})
+add_executable(analyze ${ANALYZE_SOURCES})
 
 # X11 required on Linux
 if(UNIX AND NOT APPLE)
@@ -31,3 +40,7 @@ endif()
 
 # Link libraries
 target_link_libraries(MyImageApplication wx::core wx::base ${X11_LIBRARIES})
+# analyze has no wxWidgets dependency
+if(UNIX AND NOT APPLE)
+    target_link_libraries(analyze ${X11_LIBRARIES})
+endif()
