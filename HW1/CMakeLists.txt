@@ -27,7 +27,7 @@ else()
     set(wxBUILD_SHARED ON)
 endif()
 
-add_subdirectory(dependency/wxWidgets)
+add_subdirectory(../dependency/wxWidgets ${CMAKE_CURRENT_BINARY_DIR}/wxWidgets)
 
 # Create executables
 add_executable(MyImageApplication ${SOURCES})
