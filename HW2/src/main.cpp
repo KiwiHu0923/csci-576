@@ -72,7 +72,7 @@ bool MyApp::OnInit() {
   unsigned char *data = nullptr;
   int width = 512, height = 512;
 
-  data = controller_process_pass_through(imagePath, width, height, M, Q, B);
+  data = fixedPipeline(imagePath, width, height, M, Q, B);
   if (data == nullptr) {
     cerr << "Controller failed to return image data\n";
     exit(1);
