@@ -144,12 +144,279 @@ static void writeDCTfile_adaptive(const std::string &basename, int width, int he
     out.close();
 }
 
+static ImageDCTData calDCT_fixed(const std::string &imagePath, int width, int height) {
+    ImageDCTData dctData;
+    dctData.width = width;
+    dctData.height = height;
+
+    int N = 8;
+
+    unsigned char *inData = readImageData_simple(imagePath, width, height);
+    if (!inData) {
+        std::cerr << "Failed to read image data from: " << imagePath << std::endl;
+        return dctData;
+    }
+
+    assert(width % N == 0 && height % N == 0);
+    const int blocksX = width / N;
+    const int blocksY = height / N;
+
+    for (int by = 0; by < blocksY; ++by) {
+        for (int bx = 0; bx < blocksX; ++bx) {
+            int x0 = bx * N;
+            int y0 = by * N;
+            
+            // Store block metadata
+            dctData.blockMeta.push_back(x0);
+            dctData.blockMeta.push_back(y0);
+            dctData.blockMeta.push_back(N);
+            
+            // Store DCT coefficients for all 3 channels
+            std::vector<std::vector<std::vector<double>>> blockChannels(3);
+            
+            for (int ch = 0; ch < 3; ++ch) {
+                // Extract block from image
+                std::vector<std::vector<double>> block(N, std::vector<double>(N, 0.0));
+                for (int yy = 0; yy < N; ++yy) {
+                    const int py = y0 + yy;
+                    for (int xx = 0; xx < N; ++xx) {
+                        const int px = x0 + xx;
+                        int index = (py * width + px) * 3 + ch;
+                        block[yy][xx] = static_cast<double>(inData[index]) - 128.0;
+                    }
+                }
+                
+                // Compute DCT and store
+                blockChannels[ch] = dct2d(block);
+            }
+            
+            dctData.dctCoeffs.push_back(blockChannels);
+        }
+    }
+
+    free(inData);
+    return dctData;
+}
+
+static ImageDCTData calDCT_adaptive(const std::string &imagePath, int width, int height) {
+    ImageDCTData dctData;
+    dctData.width = width;
+    dctData.height = height;
+
+    unsigned char *inData = readImageData_simple(imagePath, width, height);
+    if (!inData) {
+        std::cerr << "Failed to read image data from: " << imagePath << std::endl;
+        return dctData;
+    }
+
+    // Compute luminance buffer and block map
+    std::vector<double> lum = computeLumBuffer(inData, width, height);
+    std::vector<Block> blocks = computeBlockMap(lum, width, height, 0.15);
+
+    for (const Block &blk : blocks) {
+        int x0 = blk.x0;
+        int y0 = blk.y0;
+        int N = blk.N;
+        
+        // Store block metadata
+        dctData.blockMeta.push_back(x0);
+        dctData.blockMeta.push_back(y0);
+        dctData.blockMeta.push_back(N);
+        
+        // Store DCT coefficients for all 3 channels
+        std::vector<std::vector<std::vector<double>>> blockChannels(3);
+        
+        for (int ch = 0; ch < 3; ++ch) {
+            // Extract block from image
+            std::vector<std::vector<double>> block(N, std::vector<double>(N, 0.0));
+            for (int yy = 0; yy < N; ++yy) {
+                int py = y0 + yy;
+                for (int xx = 0; xx < N; ++xx) {
+                    int px = x0 + xx;
+                    
+                    // Clamp coordinates to image bounds
+                    int tmpY = py;
+                    int tmpX = px;
+                    if (tmpY >= height) tmpY = height - 1;
+                    if (tmpX >= width) tmpX = width - 1;
+                    if (tmpY < 0) tmpY = 0;
+                    if (tmpX < 0) tmpX = 0;
+                    
+                    int index = (tmpY * width + tmpX) * 3 + ch;
+                    block[yy][xx] = static_cast<double>(inData[index]) - 128.0;
+                }
+            }
+            
+            // Compute DCT and store
+            blockChannels[ch] = dct2d(block);
+        }
+        
+        dctData.dctCoeffs.push_back(blockChannels);
+    }
+    
+    free(inData);
+    return dctData;
+}
+
+static void quantizeWriteDCT_fixed(const ImageDCTData &dctData, int Q, const std::string &basename) {
+    int N = 8;
+    std::vector<int32_t> flattenedCoeffs;
+
+    size_t numBlocks = dctData.dctCoeffs.size();
+    for (size_t blkIdx = 0; blkIdx < numBlocks; ++blkIdx) {
+        const auto &blockChannels = dctData.dctCoeffs[blkIdx];
+        for (int ch = 0; ch < 3; ++ch) {
+            const auto& coeffs = dctData.dctCoeffs[blkIdx][ch];
+
+            auto qcoeffs = quantizeBlock(coeffs, Q);
+
+            for (int i = 0; i < N; ++i) {
+                for (int j = 0; j < N; ++j) {
+                    flattenedCoeffs.push_back(static_cast<int32_t>(qcoeffs[i][j]));
+                }
+            }
+        }
+    }
+
+    writeDCTfile(basename, dctData.width, dctData.height, N, 
+        dctData.blockMeta, flattenedCoeffs);
+}
+
+static void quantizeWriteDCT_adaptive(const ImageDCTData &dctData, int Q, const std::string &basename) {
+    std::vector<int32_t> flattenedCoeffs;
+
+    size_t numBlocks = dctData.dctCoeffs.size();
+    for (size_t blkIdx = 0; blkIdx < numBlocks; ++blkIdx) {
+        int N = dctData.blockMeta[blkIdx * 3 + 2];  // N is stored in blockMeta at index blkIdx*3 + 2
+
+        for (int ch = 0; ch < 3; ++ch) {
+            const auto& coeffs = dctData.dctCoeffs[blkIdx][ch];
+
+            auto qcoeffs = quantizeBlock(coeffs, Q);
+
+            for (int i = 0; i < N; ++i) {
+                for (int j = 0; j < N; ++j) {
+                    flattenedCoeffs.push_back(static_cast<int32_t>(qcoeffs[i][j]));
+                }
+            }
+        }
+    }
+
+    // Write to DCT file (use adaptive version)
+    writeDCTfile_adaptive(basename, dctData.width, dctData.height, 
+        dctData.blockMeta, flattenedCoeffs);
+}
+
+static int findQ_fixed(const ImageDCTData &dctData, double targetBpp, const std::string &imagePath) {
+    int Q_min = 0;
+    int Q_max = 20;
+    int bestQ = 0;
+    double bestBpp = 1e9;
+
+    while (Q_min <= Q_max) {
+        int Q_mid = (Q_min + Q_max) / 2;
+
+        std::string tempDctPath = "dct/" + imagePath + "_temp_Q" + std::to_string(Q_mid) + ".DCT";
+
+        quantizeWriteDCT_fixed(dctData, Q_mid, tempDctPath);
+        double actBpp = calCompressedBpp(tempDctPath, dctData.width, dctData.height);
+
+        if (actBpp < 0) {
+            std::cerr << "Error calculating compressed bpp for Q=" << Q_mid << std::endl;
+            break;
+        }
+
+        if (std::abs(actBpp - targetBpp) < std::abs(bestBpp - targetBpp)) {
+            bestBpp = actBpp;
+            bestQ = Q_mid;
+        }
+
+        if (actBpp > targetBpp) {
+            Q_min = Q_mid + 1;
+        } else {
+            Q_max = Q_mid - 1;
+        }
+
+        std::remove(tempDctPath.c_str());
+
+        if (std::abs(actBpp - targetBpp) < 0.05) {
+            break;
+        }
+    }
+
+    return bestQ;
+}
+
+static int findQ_adaptive(const ImageDCTData &dctData, double targetBpp, const std::string &imagePath) {
+    int Q_min = 0;
+    int Q_max = 20;
+    int bestQ = 0;
+    double bestBpp = 1e9;
+
+    while (Q_min <= Q_max) {
+        int Q_mid = (Q_min + Q_max) / 2;
+
+        std::string tempDctPath = "dct_adapt/" + imagePath + "_temp_Q" + std::to_string(Q_mid) + ".DCT";
+        
+        quantizeWriteDCT_adaptive(dctData, Q_mid, tempDctPath);
+        double actBpp = calCompressedBpp(tempDctPath, dctData.width, dctData.height);
+
+        if (actBpp < 0) {
+            std::cerr << "Error calculating compressed bpp for Q=" << Q_mid << std::endl;
+            break;
+        }
+
+        if (std::abs(actBpp - targetBpp) < std::abs(bestBpp - targetBpp)) {
+            bestBpp = actBpp;
+            bestQ = Q_mid;
+        }
+
+        if (actBpp > targetBpp) {
+            Q_min = Q_mid + 1;
+        } else {
+            Q_max = Q_mid - 1;
+        }
+
+        std::remove(tempDctPath.c_str());
+
+        if (std::abs(actBpp - targetBpp) < 0.05) {
+            break;
+        }
+    }
+
+    return bestQ;
+}
+
 unsigned char* fixedPipeline(const std::string &imagePath,
                                             int &width, int &height,
                                             int M, int Q, double B) {
     width = 512;
     height = 512;
     int N = 8; // block size
+
+    int actualQ = Q;
+    ImageDCTData dctData;
+
+    if (B > 0.0 && Q == -1) {
+        std::cout << "B > 0 mode: Finding optimal Q for target BPP = " << B << std::endl;
+
+        // Compute DCT coeffs only once
+        dctData = calDCT_fixed(imagePath, width, height);
+
+        // Find the best Q that meets the target Bpp
+        std::string basename = imagePath;
+        size_t lastSlash = basename.find_last_of("/\\");
+        if (lastSlash != std::string::npos) {
+            basename = basename.substr(lastSlash + 1);
+        }
+        size_t lastDot = basename.find_last_of('.');
+        if (lastDot != std::string::npos) {
+            basename = basename.substr(0, lastDot);
+        }
+
+        actualQ = findQ_fixed(dctData, B, basename);
+        std::cout << "Found optimal Q = " << actualQ << std::endl;
+    }
 
     unsigned char *inData = readImageData_simple(imagePath, width, height);
     if (!inData) {
@@ -172,6 +439,9 @@ unsigned char* fixedPipeline(const std::string &imagePath,
     // Clear the global block metadata
     g_blockMetadata.clear();
 
+    bool useCachedDCT = (B > 0.0 && Q == -1);
+    size_t blkIdx = 0;
+
     for (int by = 0; by < blocksY; ++by) {
         for (int bx = 0; bx < blocksX; ++bx) {
             // starting coordinates of the block in the image
@@ -185,30 +455,35 @@ unsigned char* fixedPipeline(const std::string &imagePath,
 
             // 3 channels
             for (int ch = 0; ch < 3; ++ch) {
-                // each channel is a 8x8 block of pixel values
-                std::vector<std::vector<double>> block(N, std::vector<double>(N, 0.0));
-                for (int yy = 0; yy < N; ++yy) {
-                    // py and px is the actual pixel coordinates in the image
-                    const int py = y0 + yy;
-                    for (int xx = 0; xx < N; ++xx) {
-                        const int px = x0 + xx;
-                        int index = (py * width + px) * 3 + ch;
-                        // level shift the pixel value by 128 to center around 0 for DCT
-                        block[yy][xx] = static_cast<double>(inData[index]) - 128.0;
+                std::vector<std::vector<double>> coeffs;
+
+                if (useCachedDCT) {
+                    coeffs = dctData.dctCoeffs[blkIdx][ch];
+                } else {
+                    // each channel is a 8x8 block of pixel values
+                    std::vector<std::vector<double>> block(N, std::vector<double>(N, 0.0));
+                    for (int yy = 0; yy < N; ++yy) {
+                        // py and px is the actual pixel coordinates in the image
+                        const int py = y0 + yy;
+                        for (int xx = 0; xx < N; ++xx) {
+                            const int px = x0 + xx;
+                            int index = (py * width + px) * 3 + ch;
+                            // level shift the pixel value by 128 to center around 0 for DCT
+                            block[yy][xx] = static_cast<double>(inData[index]) - 128.0;
+                        }
                     }
+                    coeffs = dct2d(block);
                 }
-                
-                // DCT and quantization
-                auto coeffs = dct2d(block);
-                auto qcoeffs = quantizeBlock(coeffs, Q);
+
+                auto qcoeffs = quantizeBlock(coeffs, actualQ);
 
                 // flatten the quantized coefficients and store for later use in reconstruction
                 for (int i = 0; i < N; ++i) {
-                    for (int j = 0; j < N; ++j) 
+                    for (int j = 0; j < N; ++j)
                         flattenedCoeffs.push_back(static_cast<int32_t>(qcoeffs[i][j]));
                 }
 
-                auto deqCoeffs = dequantizBlock(qcoeffs, Q);
+                auto deqCoeffs = dequantizBlock(qcoeffs, actualQ);
                 auto reconBlock = idct2d(deqCoeffs);
 
                 // store the reconstructed block in the recon buffer
@@ -230,6 +505,7 @@ unsigned char* fixedPipeline(const std::string &imagePath,
                     }
                 }
             }   // channel
+            blkIdx++;  // Move to next block
         }   //bx
     }   //by
 
@@ -243,7 +519,7 @@ unsigned char* fixedPipeline(const std::string &imagePath,
     if (lastDot != std::string::npos) {
         basename = basename.substr(0, lastDot);
     }
-    std::string dctFilename = "dct/" + basename + "_Q" + std::to_string(Q) + ".DCT";
+    std::string dctFilename = "dct/" + basename + "_Q" + std::to_string(actualQ) + ".DCT";
 
     writeDCTfile(dctFilename, width, height, N, blockMeta, flattenedCoeffs);
 
@@ -263,22 +539,43 @@ unsigned char* fixedPipeline(const std::string &imagePath,
 unsigned char* adaptivePipeline(const std::string &imagePath,
                                             int &width, int &height,
                                             int M, int Q, double B) {
-                    
+
     width = 512, height = 512;
 
     if (M != 2) {
         std::cerr << "Currently only M=2 is supported in adaptive pipeline." << std::endl;
         return nullptr;
     }
-    // if (Q != -1) {
-    //     std::cerr << "Currently only Q=-1 (i.e. no quantization) is supported in adaptive pipeline." << std::endl;
-    //     return nullptr;
-    // }
+
+    // Handle B > 0: find optimal Q using binary search
+    int actualQ = Q;
+    ImageDCTData dctData;
+
+    if (B > 0.0 && Q == -1) {
+        std::cout << "B > 0 mode: Finding optimal Q for target BPP = " << B << std::endl;
+
+        // Compute DCT only once
+        dctData = calDCT_adaptive(imagePath, width, height);
+
+        // Binary search for optimal Q
+        std::string basename = imagePath;
+        size_t lastSlash = basename.find_last_of("/\\");
+        if (lastSlash != std::string::npos) {
+            basename = basename.substr(lastSlash + 1);
+        }
+        size_t lastDot = basename.find_last_of('.');
+        if (lastDot != std::string::npos) {
+            basename = basename.substr(0, lastDot);
+        }
+
+        actualQ = findQ_adaptive(dctData, B, basename);
+        std::cout << "Found optimal Q = " << actualQ << std::endl;
+    }
 
     unsigned char *inData = readImageData_simple(imagePath, width, height);
     if (!inData) {
         std::cerr << "Failed to read image data from: " << imagePath << std::endl;
-        return nullptr; 
+        return nullptr;
     }
 
     std::vector<unsigned char> recon(width * height * 3, 0);
@@ -293,6 +590,9 @@ unsigned char* adaptivePipeline(const std::string &imagePath,
     // Clear the global block metadata
     g_blockMetadata.clear();
 
+    bool useCachedDCT = (B > 0.0 && Q == -1);
+    size_t blkIdx = 0;
+
     for (const Block &blk: blocks) {
         int x0 = blk.x0;
         int y0 = blk.y0;
@@ -303,33 +603,40 @@ unsigned char* adaptivePipeline(const std::string &imagePath,
         blockMeta.push_back(N);
 
         for (int ch = 0; ch < 3; ++ch) {
-            std::vector<std::vector<double>> block(N, std::vector<double>(N, 0.0));
-            for (int yy = 0; yy < N; ++yy) {
-                int py = y0 + yy;
-                // level shift for DCT
-                for (int xx = 0; xx < N; ++xx) {
-                    int px = x0 + xx;
-                    int tmpY = py;
-                    int tmpX = px;
-                    if (tmpY >= height) tmpY = height - 1;
-                    if (tmpX >= width) tmpX = width - 1;
-                    if (tmpY < 0) tmpY = 0;
-                    if (tmpX < 0) tmpX = 0;
+            std::vector<std::vector<double>> coeffs;
 
-                    int index = (tmpY * width + tmpX) * 3 + ch;
-                    block[yy][xx] = static_cast<double>(inData[index]) - 128.0;
+            if (useCachedDCT) {
+                // Use cached DCT coefficients
+                coeffs = dctData.dctCoeffs[blkIdx][ch];
+            } else {
+                // Compute DCT as before
+                std::vector<std::vector<double>> block(N, std::vector<double>(N, 0.0));
+                for (int yy = 0; yy < N; ++yy) {
+                    int py = y0 + yy;
+                    for (int xx = 0; xx < N; ++xx) {
+                        int px = x0 + xx;
+                        int tmpY = py;
+                        int tmpX = px;
+                        if (tmpY >= height) tmpY = height - 1;
+                        if (tmpX >= width) tmpX = width - 1;
+                        if (tmpY < 0) tmpY = 0;
+                        if (tmpX < 0) tmpX = 0;
+
+                        int index = (tmpY * width + tmpX) * 3 + ch;
+                        block[yy][xx] = static_cast<double>(inData[index]) - 128.0;
+                    }
                 }
+                coeffs = dct2d(block);
             }
 
-            auto coeffs = dct2d(block);
-            auto qcoeffs = quantizeBlock(coeffs, Q);
+            auto qcoeffs = quantizeBlock(coeffs, actualQ);
 
             for (int i = 0; i < N; ++i) {
-                for (int j = 0; j < N; ++j) 
+                for (int j = 0; j < N; ++j)
                     flattenedCoeffs.push_back(static_cast<int32_t>(qcoeffs[i][j]));
             }
 
-            auto deqCoeffs = dequantizBlock(qcoeffs, Q);
+            auto deqCoeffs = dequantizBlock(qcoeffs, actualQ);
             auto reconBlock = idct2d(deqCoeffs);
 
             for (int yy = 0; yy < N; ++yy) {
@@ -354,6 +661,7 @@ unsigned char* adaptivePipeline(const std::string &imagePath,
                 }
             }
         } // channel
+        blkIdx++;  // Move to next block
     } // blocks
 
     // Write the DCT file with quantized coefficients
@@ -366,7 +674,7 @@ unsigned char* adaptivePipeline(const std::string &imagePath,
     if (lastDot != std::string::npos) {
         basename = basename.substr(0, lastDot);
     }
-    std::string dctFilename = "dct_adapt/" + basename + "_Q" + std::to_string(Q) + ".DCT";
+    std::string dctFilename = "dct_adapt/" + basename + "_Q" + std::to_string(actualQ) + ".DCT";
 
     writeDCTfile_adaptive(dctFilename, width, height, blockMeta, flattenedCoeffs);
 

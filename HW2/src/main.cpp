@@ -76,7 +76,16 @@ bool MyApp::OnInit() {
   unsigned char *data = nullptr;
   int width = 512, height = 512;
 
-  data = adaptivePipeline(imagePath, width, height, M, Q, B);
+  // Call appropriate pipeline based on M value
+  if (M == 1) {
+    data = fixedPipeline(imagePath, width, height, M, Q, B);
+  } else if (M == 2) {
+    data = adaptivePipeline(imagePath, width, height, M, Q, B);
+  } else {
+    cerr << "Invalid M value. Must be 1 (fixed 8x8) or 2 (adaptive NxN)" << endl;
+    exit(1);
+  }
+
   if (data == nullptr) {
     cerr << "Controller failed to return image data\n";
     exit(1);

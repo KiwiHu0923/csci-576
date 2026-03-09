@@ -3,6 +3,9 @@
 build/
 */build/
 
+# DCT output directories (HW2)
+HW2/dct/
+HW2/dct_adapt/
 
 # VS Code temporary files
 .vscode
