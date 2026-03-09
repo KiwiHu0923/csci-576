@@ -3,11 +3,16 @@
 #include <string>
 #include <vector>
 #include <cassert>
+#include <cstdlib>
+#include <sys/stat.h>
 
 #include "controller.h"
 #include "dct.cpp"
 #include "quantizer.cpp"
 #include "block_decision.h"
+
+// Global variable to store block metadata for visualization
+std::vector<int> g_blockMetadata;
 
 // A simple pass-through function to read image data from a file.
 unsigned char *readImageData_simple(const std::string &imagePath, int width, int height) {
@@ -40,6 +45,32 @@ unsigned char *readImageData_simple(const std::string &imagePath, int width, int
 
 }
 
+static double calCompressedBpp(const std::string& filePath, int width, int height) {
+    std::string gzipCmd = "gzip -c \"" + filePath + "\" > \"" + filePath + ".gz\"";
+    int result = system(gzipCmd.c_str());
+
+    if (result != 0) {
+        std::cerr << "Error compressing file with gzip: " << filePath << std::endl;
+        return -1.0;
+    }
+
+    //Get the size of the compressed file
+    struct stat st;
+    std::string gzipFile = filePath + ".gz";
+    if (stat(gzipFile.c_str(), &st) != 0) {
+        std::cerr << "Error getting file size: " << gzipFile << std::endl;
+        return -1.0;
+    }
+
+    size_t compressedBytes = st.st_size;
+    double bitsPerPixel = (compressedBytes * 8.0) / (width * height);
+
+    // Clean up the temporary gzip file
+    std::remove(gzipFile.c_str());
+
+    return bitsPerPixel;
+}
+
 static void writeDCTfile(const std::string &basename, int width, int height, int blockSize, const std::vector<int> &blockMeta, const std::vector<int32_t> &flattenedCoeffs) {
     std::ofstream out(basename, std::ios::binary);
     if (!out.is_open()) {
@@ -51,6 +82,11 @@ static void writeDCTfile(const std::string &basename, int width, int height, int
     uint32_t h = static_cast<uint32_t>(height);
     uint8_t ch = 3;
     uint32_t bs = static_cast<uint32_t>(blockSize);
+
+    if (blockMeta.size() % 3 != 0) {
+        std::cerr << "Error: blockMeta size should be a multiple of 3 (x0, y0, N for each block)." << std::endl;
+        return;
+    }
     uint32_t numBlocks = static_cast<uint32_t>(blockMeta.size() / 3); // each block has 3 metadata integers (x0, y0, N)
 
     out.write(reinterpret_cast<const char*>(&w), sizeof(w));
@@ -69,6 +105,42 @@ static void writeDCTfile(const std::string &basename, int width, int height, int
     for (int32_t coeff: flattenedCoeffs) {
         out.write(reinterpret_cast<const char*>(&coeff), sizeof(coeff));
     }
+    out.close();
+}
+
+static void writeDCTfile_adaptive(const std::string &basename, int width, int height, const std::vector<int> &blockMeta, const std::vector<int32_t> &flattenedCoeffs) {
+    std::ofstream out(basename, std::ios::binary);
+    if (!out.is_open()) {
+        std::cerr << "Error opening file for writing: " << basename << std::endl;
+        return;
+    }
+
+    uint32_t w = static_cast<uint32_t>(width);
+    uint32_t h = static_cast<uint32_t>(height);
+    uint8_t ch = 3;
+
+    uint32_t bs = 0; // block size is not fixed in adaptive pipeline, keep it as 0 to indicate variable block size
+    if (blockMeta.size() % 3 != 0) {
+        std::cerr << "Error: blockMeta size should be a multiple of 3 (x0, y0, N for each block)." << std::endl;
+        return;
+    }
+    uint32_t numBlocks = static_cast<uint32_t>(blockMeta.size() / 3); // each block has 3 metadata integers (x0, y0, N)
+
+    out.write(reinterpret_cast<const char*>(&w), sizeof(w));
+    out.write(reinterpret_cast<const char*>(&h), sizeof(h));
+    out.write(reinterpret_cast<const char*>(&ch), sizeof(ch));
+    out.write(reinterpret_cast<const char*>(&bs), sizeof(bs)); // block size is not fixed
+    out.write(reinterpret_cast<const char*>(&numBlocks), sizeof(numBlocks));
+
+    for (int v : blockMeta) {
+        int32_t val = static_cast<int32_t>(v);
+        out.write(reinterpret_cast<const char*>(&val), sizeof(val));
+    }
+
+    for (int32_t coeff : flattenedCoeffs) {
+        out.write(reinterpret_cast<const char*>(&coeff), sizeof(coeff));
+    }
+
     out.close();
 }
 
@@ -96,6 +168,9 @@ unsigned char* fixedPipeline(const std::string &imagePath,
 
     std::vector<int> blockMeta;
     std::vector<int32_t> flattenedCoeffs;
+
+    // Clear the global block metadata
+    g_blockMetadata.clear();
 
     for (int by = 0; by < blocksY; ++by) {
         for (int bx = 0; bx < blocksX; ++bx) {
@@ -168,9 +243,12 @@ unsigned char* fixedPipeline(const std::string &imagePath,
     if (lastDot != std::string::npos) {
         basename = basename.substr(0, lastDot);
     }
-    std::string dctFilename = "dct/" + basename + ".DCT";
+    std::string dctFilename = "dct/" + basename + "_Q" + std::to_string(Q) + ".DCT";
 
     writeDCTfile(dctFilename, width, height, N, blockMeta, flattenedCoeffs);
+
+    // Store block metadata globally for visualization
+    g_blockMetadata = blockMeta;
 
     // return the reconstructed image data
     unsigned char *out = (unsigned char *) malloc(static_cast<size_t>(width * height * 3 * sizeof(unsigned char)));
@@ -192,10 +270,10 @@ unsigned char* adaptivePipeline(const std::string &imagePath,
         std::cerr << "Currently only M=2 is supported in adaptive pipeline." << std::endl;
         return nullptr;
     }
-    if (Q != -1) {
-        std::cerr << "Currently only Q=-1 (i.e. no quantization) is supported in adaptive pipeline." << std::endl;
-        return nullptr;
-    }
+    // if (Q != -1) {
+    //     std::cerr << "Currently only Q=-1 (i.e. no quantization) is supported in adaptive pipeline." << std::endl;
+    //     return nullptr;
+    // }
 
     unsigned char *inData = readImageData_simple(imagePath, width, height);
     if (!inData) {
@@ -205,11 +283,15 @@ unsigned char* adaptivePipeline(const std::string &imagePath,
 
     std::vector<unsigned char> recon(width * height * 3, 0);
 
+    // Compute the luminance buffer and block map for adaptive processing
     std::vector<double> lum = computeLumBuffer(inData, width, height);
     std::vector<Block> blocks = computeBlockMap(lum, width, height, 0.15);
 
     std::vector<int> blockMeta;
     std::vector<int32_t> flattenedCoeffs;
+
+    // Clear the global block metadata
+    g_blockMetadata.clear();
 
     for (const Block &blk: blocks) {
         int x0 = blk.x0;
@@ -224,6 +306,7 @@ unsigned char* adaptivePipeline(const std::string &imagePath,
             std::vector<std::vector<double>> block(N, std::vector<double>(N, 0.0));
             for (int yy = 0; yy < N; ++yy) {
                 int py = y0 + yy;
+                // level shift for DCT
                 for (int xx = 0; xx < N; ++xx) {
                     int px = x0 + xx;
                     int tmpY = py;
@@ -283,9 +366,12 @@ unsigned char* adaptivePipeline(const std::string &imagePath,
     if (lastDot != std::string::npos) {
         basename = basename.substr(0, lastDot);
     }
-    std::string dctFilename = "dct_adapt/" + basename + ".DCT";
+    std::string dctFilename = "dct_adapt/" + basename + "_Q" + std::to_string(Q) + ".DCT";
 
     writeDCTfile_adaptive(dctFilename, width, height, blockMeta, flattenedCoeffs);
+
+    // Store block metadata globally for visualization
+    g_blockMetadata = blockMeta;
 
     unsigned char *out = (unsigned char *) malloc(static_cast<size_t>(width * height * 3 * sizeof(unsigned char)));
     if (!out) {

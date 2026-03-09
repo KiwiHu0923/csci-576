@@ -8,6 +8,9 @@ set(CMAKE_CXX_STANDARD 17)
 set(SOURCES
     src/main.cpp
     src/controller.cpp
+    src/dct.cpp
+    src/quantizer.cpp
+    src/block_decision.cpp
 )
 
 if(WIN32)

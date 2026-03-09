@@ -3,7 +3,7 @@
 #include <string>
 
 #include "block_decision.h"
-#include "dct.h"
+#include "dct.cpp"
 
 static const int MAX_BS = 32;
 static const int MIN_BS = 2;
@@ -24,24 +24,6 @@ static inline double TforSize(double base, int bs) {
         default: return base;
     }
 }
-
-std::vector<double> computeLumBuffer(const unsigned char* rgbData, int width, int height) {
-    std::vector<double> lum(size_t (width * height), 0.0);
-    if (!rgbData) return lum;
-
-    for (int r = 0; r < height; ++r) {
-        for (int c = 0; c < width; ++c) {
-            size_t idx = (size_t) (r * width +c);
-            int base = (int)idx * 3;
-            unsigned char R = rgbData[base];
-            unsigned char G = rgbData[base + 1];
-            unsigned char B = rgbData[base + 2];
-            lum[idx] = 0.299 * (double)R + 0.587 * (double)G + 0.114 * (double)B;
-        }
-    }
-    return lum;
-}
-
 static inline double lumClamped(const std::vector<double>& lum, int width, int height, int r, int c) {
     int rr = clampInt(r, 0, height - 1);
     int cc = clampInt(c, 0, width - 1);
@@ -116,6 +98,24 @@ static void split(const std::vector<double>& lum,
         outBlocks.push_back({x0, y0, bs});
     }
 }
+
+std::vector<double> computeLumBuffer(const unsigned char* rgbData, int width, int height) {
+    std::vector<double> lum(size_t (width * height), 0.0);
+    if (!rgbData) return lum;
+
+    for (int r = 0; r < height; ++r) {
+        for (int c = 0; c < width; ++c) {
+            size_t idx = (size_t) (r * width +c);
+            int base = (int)idx * 3;
+            unsigned char R = rgbData[base];
+            unsigned char G = rgbData[base + 1];
+            unsigned char B = rgbData[base + 2];
+            lum[idx] = 0.299 * (double)R + 0.587 * (double)G + 0.114 * (double)B;
+        }
+    }
+    return lum;
+}
+
 
 std::vector<Block> computeBlockMap(const std::vector<double>& lum,
                                     int width,

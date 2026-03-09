@@ -8,6 +8,9 @@
 
 #include "controller.h"
 
+// Declare external global variable for block metadata
+extern std::vector<int> g_blockMetadata;
+
 using namespace std;
 namespace fs = std::filesystem;
 
@@ -40,6 +43,7 @@ class MyFrame : public wxFrame {
   wxScrolledWindow *scrolledWindow;
   int width;
   int height;
+  bool showBlocks;
 };
 
 /** Utility function to read image data */
@@ -72,7 +76,7 @@ bool MyApp::OnInit() {
   unsigned char *data = nullptr;
   int width = 512, height = 512;
 
-  data = fixedPipeline(imagePath, width, height, M, Q, B);
+  data = adaptivePipeline(imagePath, width, height, M, Q, B);
   if (data == nullptr) {
     cerr << "Controller failed to return image data\n";
     exit(1);
@@ -91,7 +95,7 @@ bool MyApp::OnInit() {
  * We also bind a key event handler to toggle block boundaries when 'B' is pressed.
  */
 MyFrame::MyFrame(const wxString &title, unsigned char * pixelData, int w, int h)
-  : wxFrame(NULL, wxID_ANY, title), width(w), height(h) {
+  : wxFrame(NULL, wxID_ANY, title), width(w), height(h), showBlocks(false) {
     inImage.SetData(pixelData, width, height, false);
 
     scrolledWindow = new wxScrolledWindow(this, wxID_ANY);
@@ -104,8 +108,8 @@ MyFrame::MyFrame(const wxString &title, unsigned char * pixelData, int w, int h)
     Bind(wxEVT_CHAR_HOOK, [this](wxKeyEvent &evt){
       int key = evt.GetKeyCode();
       if (key == 'B' || key == 'b') {
-        // TODO: toggle a boolean and Refresh() -> OnPaint will draw overlay when true
-        // e.g., this->showBlocks = !this->showBlocks; this->Refresh();
+        this->showBlocks = !this->showBlocks;
+        this->Refresh();
       }
       evt.Skip();
     });
@@ -120,6 +124,22 @@ void MyFrame::OnPaint(wxPaintEvent &event) {
 
   wxBitmap inImageBitmap = wxBitmap(inImage);
   dc.DrawBitmap(inImageBitmap, 0, 0, false);
+
+  // Draw block boundaries if showBlocks is enabled
+  if (showBlocks && !g_blockMetadata.empty()) {
+    dc.SetPen(wxPen(*wxGREEN, 2));
+    dc.SetBrush(*wxTRANSPARENT_BRUSH);
+
+    // g_blockMetadata contains triplets: x0, y0, N for each block
+    for (size_t i = 0; i + 2 < g_blockMetadata.size(); i += 3) {
+      int x0 = g_blockMetadata[i];
+      int y0 = g_blockMetadata[i + 1];
+      int N = g_blockMetadata[i + 2];
+
+      // Draw rectangle for this block
+      dc.DrawRectangle(x0, y0, N, N);
+    }
+  }
 }
 
 /** Utility function to read image data */
