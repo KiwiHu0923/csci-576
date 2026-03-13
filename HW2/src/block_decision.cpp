@@ -3,7 +3,7 @@
 #include <string>
 
 #include "block_decision.h"
-#include "dct.cpp"
+#include "dct.h"
 
 static const int MAX_BS = 32;
 static const int MIN_BS = 2;
@@ -14,6 +14,7 @@ static inline int clampInt(int v, int minVal, int maxVal) {
     else return v;
 }
 
+// Threshold for splitting blocks is scaled based on block size. Smaller blocks have higher thresholds to avoid over-splitting.
 static inline double TforSize(double base, int bs) {
     switch(bs) {
         case 32: return base * 0.25;
@@ -43,6 +44,7 @@ static std::vector<std::vector<double>> buildBlock2d(const std::vector<double>& 
     return block;
 }
 
+// Compute the ratio of high frequency energy to total energy in the DCT coefficients of the block.
 static double blockDCTHighFreqRatio(const std::vector<double>& lum, int width, int height, int x0, int y0, int N) {
     auto block2d = buildBlock2d(lum, width, height, x0, y0, N);
     std::vector<std::vector<double>> coeffs = dct2d(block2d);
@@ -62,6 +64,7 @@ static double blockDCTHighFreqRatio(const std::vector<double>& lum, int width, i
 
     if (E_total <= 0.0) return 0.0;
 
+    // The DC coefficient is at (0, 0) and the rest are high frequency coefficients.
     double E_dc = coeffs[0][0] * coeffs[0][0];
     double E_high = E_total - E_dc;
 
@@ -70,6 +73,7 @@ static double blockDCTHighFreqRatio(const std::vector<double>& lum, int width, i
     return E_high / E_total;
 }
 
+// Recursively split the block if the high frequency ratio exceeds the threshold for that block size.
 static void split(const std::vector<double>& lum,
                  int width,
                 int height,
@@ -83,6 +87,7 @@ static void split(const std::vector<double>& lum,
         return;
     }
 
+    // Compute the high frequency ratio for this block
     double ratio = blockDCTHighFreqRatio(lum, width, height, x0, y0, bs);
     double threshold = TforSize(baseThreshold, bs);
     
@@ -99,6 +104,8 @@ static void split(const std::vector<double>& lum,
     }
 }
 
+// Compute the luminance buffer from the RGB data using the formula:
+// L = 0.299 * R + 0.587 * G + 0.114 * B
 std::vector<double> computeLumBuffer(const unsigned char* rgbData, int width, int height) {
     std::vector<double> lum(size_t (width * height), 0.0);
     if (!rgbData) return lum;
@@ -116,7 +123,7 @@ std::vector<double> computeLumBuffer(const unsigned char* rgbData, int width, in
     return lum;
 }
 
-
+// Compute the block map for the image based on the luminance buffer and the base threshold.
 std::vector<Block> computeBlockMap(const std::vector<double>& lum,
                                     int width,
                                     int height,
@@ -125,6 +132,8 @@ std::vector<Block> computeBlockMap(const std::vector<double>& lum,
     
     for (int y0 = 0; y0 < height; y0 += MAX_BS) {
         for (int x0 = 0; x0 < width; x0 += MAX_BS) {
+            // recursively split the block starting at (x0, y0) with size MAX_BS until we reach blocks that are small enough or have low high-frequency content
+            // store the resulting blocks in the blocks vector
             split(lum, width, height, x0, y0, baseT, blocks, MAX_BS);
         }
     }

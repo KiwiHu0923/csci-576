@@ -74,13 +74,12 @@ bool MyApp::OnInit() {
   double B = stod(wxApp::argv[4].ToStdString());
 
   unsigned char *data = nullptr;
-  int width = 512, height = 512;
 
   // Call appropriate pipeline based on M value
   if (M == 1) {
-    data = fixedPipeline(imagePath, width, height, M, Q, B);
+    data = fixedPipeline(imagePath, M, Q, B);
   } else if (M == 2) {
-    data = adaptivePipeline(imagePath, width, height, M, Q, B);
+    data = adaptivePipeline(imagePath, M, Q, B);
   } else {
     cerr << "Invalid M value. Must be 1 (fixed 8x8) or 2 (adaptive NxN)" << endl;
     exit(1);
@@ -91,7 +90,7 @@ bool MyApp::OnInit() {
     exit(1);
   }
 
-  MyFrame *frame = new MyFrame("Image Display", data, width, height);
+  MyFrame *frame = new MyFrame("Image Display", data, IMAGE_WIDTH, IMAGE_HEIGHT);
   frame->Show(true);
 
   // return true to continue, false to exit the application
@@ -114,6 +113,7 @@ MyFrame::MyFrame(const wxString &title, unsigned char * pixelData, int w, int h)
     SetClientSize(width, height);
     SetBackgroundColour(*wxBLACK);
 
+    // setting up a key event handler to toggle block boundaries when 'B' is pressed
     Bind(wxEVT_CHAR_HOOK, [this](wxKeyEvent &evt){
       int key = evt.GetKeyCode();
       if (key == 'B' || key == 'b') {
@@ -151,52 +151,52 @@ void MyFrame::OnPaint(wxPaintEvent &event) {
   }
 }
 
-/** Utility function to read image data */
-unsigned char *readImageData(string imagePath, int width, int height) {
+// /** Utility function to read image data */
+// unsigned char *readImageData(string imagePath, int width, int height) {
 
-  // Open the file in binary mode
-  ifstream inputFile(imagePath, ios::binary);
+//   // Open the file in binary mode
+//   ifstream inputFile(imagePath, ios::binary);
 
-  if (!inputFile.is_open()) {
-    cerr << "Error Opening File for Reading" << endl;
-    exit(1);
-  }
+//   if (!inputFile.is_open()) {
+//     cerr << "Error Opening File for Reading" << endl;
+//     exit(1);
+//   }
 
-  // Create and populate RGB buffers
-  vector<char> Rbuf(width * height);
-  vector<char> Gbuf(width * height);
-  vector<char> Bbuf(width * height);
+//   // Create and populate RGB buffers
+//   vector<char> Rbuf(width * height);
+//   vector<char> Gbuf(width * height);
+//   vector<char> Bbuf(width * height);
 
-  /**
-   * The input RGB file is formatted as RRRR.....GGGG....BBBB.
-   * i.e the R values of all the pixels followed by the G values
-   * of all the pixels followed by the B values of all pixels.
-   * Hence we read the data in that order.
-   */
+//   /**
+//    * The input RGB file is formatted as RRRR.....GGGG....BBBB.
+//    * i.e the R values of all the pixels followed by the G values
+//    * of all the pixels followed by the B values of all pixels.
+//    * Hence we read the data in that order.
+//    */
 
-  inputFile.read(Rbuf.data(), width * height);
-  inputFile.read(Gbuf.data(), width * height);
-  inputFile.read(Bbuf.data(), width * height);
+//   inputFile.read(Rbuf.data(), width * height);
+//   inputFile.read(Gbuf.data(), width * height);
+//   inputFile.read(Bbuf.data(), width * height);
 
-  inputFile.close();
+//   inputFile.close();
 
-  /**
-   * Allocate a buffer to store the pixel values
-   * The data must be allocated with malloc(), NOT with operator new. wxWidgets
-   * library requires this.
-   */
-  unsigned char *inData =
-      (unsigned char *)malloc(width * height * 3 * sizeof(unsigned char));
+//   /**
+//    * Allocate a buffer to store the pixel values
+//    * The data must be allocated with malloc(), NOT with operator new. wxWidgets
+//    * library requires this.
+//    */
+//   unsigned char *inData =
+//       (unsigned char *)malloc(width * height * 3 * sizeof(unsigned char));
       
-  for (int i = 0; i < height * width; i++) {
-    // We populate RGB values of each pixel in that order
-    // RGB.RGB.RGB and so on for all pixels
-    inData[3 * i] = Rbuf[i];
-    inData[3 * i + 1] = Gbuf[i];
-    inData[3 * i + 2] = Bbuf[i];
-  }
+//   for (int i = 0; i < height * width; i++) {
+//     // We populate RGB values of each pixel in that order
+//     // RGB.RGB.RGB and so on for all pixels
+//     inData[3 * i] = Rbuf[i];
+//     inData[3 * i + 1] = Gbuf[i];
+//     inData[3 * i + 2] = Bbuf[i];
+//   }
 
-  return inData;
-}
+//   return inData;
+// }
 
 wxIMPLEMENT_APP(MyApp);
