@@ -6,7 +6,7 @@
 #   ./scripts/run_experiment.sh <imagePath> [outputCSV]
 #
 # Example:
-#   ./scripts/run_experiment.sh sample_images/Lena_512_512.rgb results/Lena.csv
+#   ./scripts/run_experiment.sh inputs/Lena_512_512.rgb results/Lena.csv
 #
 # If outputCSV is omitted, results are written to results/<imageName>.csv
 #

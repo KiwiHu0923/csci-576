@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.5)
+cmake_minimum_required(VERSION 3.10)
 
 project(HW2)
 
@@ -23,7 +23,7 @@ endif()
 add_subdirectory(../dependency/wxWidgets ${CMAKE_CURRENT_BINARY_DIR}/wxWidgets)
 
 # Create executable
-add_executable(HW2Application ${SOURCES})
+add_executable(MyImageApplication ${SOURCES})
 
 # X11 required on Linux
 if(UNIX AND NOT APPLE)
@@ -31,4 +31,4 @@ if(UNIX AND NOT APPLE)
 endif()
 
 # Link libraries
-target_link_libraries(HW2Application wx::core wx::base ${X11_LIBRARIES})
+target_link_libraries(MyImageApplication wx::core wx::base ${X11_LIBRARIES})
